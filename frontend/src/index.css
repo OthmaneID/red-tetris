@@ -1,0 +1,7 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply bg-neutral-950 text-neutral-100 font-sans m-0 antialiased selection:bg-rose-500 selection:text-white min-h-screen;
+  }
+}
