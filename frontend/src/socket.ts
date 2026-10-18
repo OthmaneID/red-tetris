@@ -3,9 +3,10 @@ import type { ClientToServerEvents, ServerToClientEvents } from "./types/socket.
 
 export type TypedSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
-const SERVER_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+const SERVER_URL =
+  import.meta.env.VITE_BACKEND_URL ||
+  (import.meta.env.DEV ? "http://localhost:8000" : window.location.origin);
 
-// Export a singleton typed socket instance
 export const socket: TypedSocket = io(SERVER_URL, {
   autoConnect: true,
   withCredentials: true,

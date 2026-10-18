@@ -6,7 +6,11 @@ export default defineConfig({
     include: ["src/**/*.test.ts"],
     coverage: {
       provider: "v8",
-      include: ["src/game/tetrisEngine.ts"],
+      include: [
+        "src/game/tetrisEngine.ts",
+        "src/utils/hashRouter.ts",
+        "src/events/socketEvents.ts",
+      ],
       reporter: ["text", "text-summary"],
       thresholds: {
         statements: 70,
