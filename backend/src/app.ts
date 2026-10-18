@@ -1,44 +1,45 @@
-import express, { NextFunction, type Application, type Request, type Response } from "express";
+import express, { type Application, type Request, type Response } from "express";
 import dotenv from "dotenv";
-import cors from "cors"
-import authRouter from "./routes/auth.ts";
+import cors from "cors";
 import { createServer } from "node:http";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { Server } from "socket.io";
 import { registerSocketHandlers } from "./sockets/index.ts";
+import { leaderboard } from "./game/leaderboard.ts";
 
 dotenv.config();
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const app: Application = express();
 
 const PORT = process.env.BACKEND_PORT || 8000;
+const allowedOrigins = ["http://localhost:3000", "http://127.0.0.1:3000"];
 
-const allowedOrigins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+app.use(
+  cors({
+    origin: allowedOrigins,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    credentials: true,
+  })
+);
+app.use(express.json());
 
-const corsOptions: cors.CorsOptions = {
-  origin: allowedOrigins,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-  credentials: true,
-};
-// for cors
-app.use(cors(corsOptions))
-// for parsing the body of a request
-app.use(express.json())
-
-//  just for fun
-app.use((req:Request, response:Response, next: NextFunction) => {
-    console.log("INFO: " + req.method + " " + req.path)
-    next()
-})
-
-app.get("/", (req: Request, res: Response) => {
-  res.send("Hello World!");
+app.get("/api/leaderboard", (_req: Request, res: Response) => {
+  res.json({ entries: leaderboard.top(10) });
 });
 
-app.use("/auth",authRouter);
+const clientDist = join(__dirname, "../../frontend/dist");
+if (existsSync(clientDist)) {
+  app.use(express.static(clientDist));
+  app.get(/.*/, (_req: Request, res: Response) => {
+    res.sendFile(join(clientDist, "index.html"));
+  });
+}
 
 const httpServer = createServer(app);
 
-// Attach Socket.io to the HTTP server with CORS configured
 const io = new Server(httpServer, {
   cors: {
     origin: allowedOrigins,
@@ -47,9 +48,10 @@ const io = new Server(httpServer, {
   },
 });
 
-// Register all socket event handlers
 registerSocketHandlers(io);
 
 httpServer.listen(PORT, () => {
-  console.log(`Server & WebSockets listening on port ${PORT}`);
+  console.log(`Red Tetris server & WebSockets listening on port ${PORT}`);
 });
+
+export { app, httpServer, io };

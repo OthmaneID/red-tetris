@@ -1,8 +1,5 @@
 import { socket } from "../socket.ts";
-import type {
-  RoomInfo,
-  TetrominoType,
-} from "../types/socket.ts";
+import type { GameMode, RoomInfo, TetrominoType } from "../types/socket.ts";
 
 export interface SocketEventHandlers {
   onConnect?: () => void;
@@ -10,18 +7,15 @@ export interface SocketEventHandlers {
   onConnectError?: (error: Error) => void;
   onRoomUpdated?: (room: RoomInfo) => void;
   onRoomError?: (error: { message: string }) => void;
-  onGameStarted?: (payload: { initialPieces: TetrominoType[] }) => void;
-  onPieceStream?: (pieces: TetrominoType[]) => void;
-  onPenaltyLines?: (payload: { count: number; fromPlayer: string }) => void;
-  onOpponentSpectrum?: (payload: { playerId: string; spectrum: number[][] }) => void;
-  onPlayerEliminated?: (payload: { playerId: string; username: string }) => void;
-  onGameEnded?: (payload: { winnerId: string; winnerUsername: string }) => void;
+  onQueueMatched?: (payload: { room: string; username: string }) => void;
+  onGameStarted?: (payload: { pieces: TetrominoType[]; mode: GameMode }) => void;
+  onPieces?: (payload: { pieces: TetrominoType[] }) => void;
+  onPenalty?: (payload: { count: number; from: string }) => void;
+  onSpectrum?: (payload: { playerId: string; username: string; spectrum: number[] }) => void;
+  onEliminated?: (payload: { playerId: string; username: string }) => void;
+  onEnded?: (payload: { winnerId: string | null; winnerUsername: string | null }) => void;
 }
 
-/**
- * Registers incoming socket listeners from the server.
- * Returns an unsubscribe cleanup function to be called on unmount.
- */
 export function registerSocketListeners(handlers: SocketEventHandlers): () => void {
   const {
     onConnect,
@@ -29,12 +23,13 @@ export function registerSocketListeners(handlers: SocketEventHandlers): () => vo
     onConnectError,
     onRoomUpdated,
     onRoomError,
+    onQueueMatched,
     onGameStarted,
-    onPieceStream,
-    onPenaltyLines,
-    onOpponentSpectrum,
-    onPlayerEliminated,
-    onGameEnded,
+    onPieces,
+    onPenalty,
+    onSpectrum,
+    onEliminated,
+    onEnded,
   } = handlers;
 
   if (onConnect) socket.on("connect", onConnect);
@@ -42,12 +37,13 @@ export function registerSocketListeners(handlers: SocketEventHandlers): () => vo
   if (onConnectError) socket.on("connect_error", onConnectError);
   if (onRoomUpdated) socket.on("room:updated", onRoomUpdated);
   if (onRoomError) socket.on("room:error", onRoomError);
+  if (onQueueMatched) socket.on("queue:matched", onQueueMatched);
   if (onGameStarted) socket.on("game:started", onGameStarted);
-  if (onPieceStream) socket.on("game:pieceStream", onPieceStream);
-  if (onPenaltyLines) socket.on("game:penaltyLines", onPenaltyLines);
-  if (onOpponentSpectrum) socket.on("game:opponentSpectrum", onOpponentSpectrum);
-  if (onPlayerEliminated) socket.on("game:playerEliminated", onPlayerEliminated);
-  if (onGameEnded) socket.on("game:ended", onGameEnded);
+  if (onPieces) socket.on("game:pieces", onPieces);
+  if (onPenalty) socket.on("game:penalty", onPenalty);
+  if (onSpectrum) socket.on("game:spectrum", onSpectrum);
+  if (onEliminated) socket.on("game:eliminated", onEliminated);
+  if (onEnded) socket.on("game:ended", onEnded);
 
   return () => {
     if (onConnect) socket.off("connect", onConnect);
@@ -55,56 +51,41 @@ export function registerSocketListeners(handlers: SocketEventHandlers): () => vo
     if (onConnectError) socket.off("connect_error", onConnectError);
     if (onRoomUpdated) socket.off("room:updated", onRoomUpdated);
     if (onRoomError) socket.off("room:error", onRoomError);
+    if (onQueueMatched) socket.off("queue:matched", onQueueMatched);
     if (onGameStarted) socket.off("game:started", onGameStarted);
-    if (onPieceStream) socket.off("game:pieceStream", onPieceStream);
-    if (onPenaltyLines) socket.off("game:penaltyLines", onPenaltyLines);
-    if (onOpponentSpectrum) socket.off("game:opponentSpectrum", onOpponentSpectrum);
-    if (onPlayerEliminated) socket.off("game:playerEliminated", onPlayerEliminated);
-    if (onGameEnded) socket.off("game:ended", onGameEnded);
+    if (onPieces) socket.off("game:pieces", onPieces);
+    if (onPenalty) socket.off("game:penalty", onPenalty);
+    if (onSpectrum) socket.off("game:spectrum", onSpectrum);
+    if (onEliminated) socket.off("game:eliminated", onEliminated);
+    if (onEnded) socket.off("game:ended", onEnded);
   };
 }
-
-// ==========================================
-// OUTGOING EMIT HELPERS
-// ==========================================
 
 export const socketEmitters = {
   joinRoom: (
     payload: { room: string; username: string },
     callback?: (response: { success: boolean; error?: string; room?: RoomInfo }) => void
-  ) => {
-    socket.emit("room:join", payload, callback);
-  },
+  ) => socket.emit("room:join", payload, callback),
 
-  leaveRoom: () => {
-    socket.emit("room:leave");
-  },
+  leaveRoom: () => socket.emit("room:leave"),
 
-  startGame: () => {
-    socket.emit("game:start");
-  },
+  setMode: (mode: GameMode) => socket.emit("room:setMode", { mode }),
 
-  sendMove: (direction: "left" | "right" | "down") => {
-    socket.emit("game:move", { direction });
-  },
+  joinQueue: (
+    payload: { username: string },
+    callback?: (response: { success: boolean; queued: boolean; error?: string }) => void
+  ) => socket.emit("queue:join", payload, callback),
 
-  sendRotate: () => {
-    socket.emit("game:rotate");
-  },
+  leaveQueue: () => socket.emit("queue:leave"),
 
-  sendHardDrop: () => {
-    socket.emit("game:hardDrop");
-  },
+  startGame: (callback?: (response: { success: boolean; error?: string }) => void) =>
+    socket.emit("game:start", callback),
 
-  sendBoardUpdate: (spectrum: number[][]) => {
-    socket.emit("game:boardUpdate", { spectrum });
-  },
+  requestPieces: (consumed: number) => socket.emit("game:requestPieces", { haveCount: consumed }),
 
-  sendLinesCleared: (count: number) => {
-    socket.emit("game:linesCleared", { count });
-  },
+  sendLinesCleared: (count: number) => socket.emit("game:linesCleared", { count }),
 
-  sendGameOver: () => {
-    socket.emit("game:over");
-  },
+  sendSpectrum: (spectrum: number[]) => socket.emit("game:spectrum", { spectrum }),
+
+  sendGameOver: (score: number, lines: number) => socket.emit("game:over", { score, lines }),
 };
